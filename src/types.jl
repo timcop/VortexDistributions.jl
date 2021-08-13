@@ -45,6 +45,17 @@ mutable struct PointVortex <: Vortex
     qv::Int64
 end
 
+mutable struct PointVortex3D <: Vortex
+    xv::Float64
+    yv::Float64
+    zv::Float64
+    qv::Int64
+end
+
+mutable struct Filament <: Vortex
+    points::Array{PointVortex{T}, 1} where T
+end
+
 struct Ansatz <: CoreShape
     f::Interpolations.GriddedInterpolation{Float64, 1, Float64, Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{Float64}}}
     ξ::Float64
@@ -68,7 +79,7 @@ mutable struct Dipole <: VortexGroup
 end
 
 mutable struct Cluster <: VortexGroup
-    vortices::Array{PointVortex,1}
+    vortices::Array{PointVortex,1} # Should specify that each element is same type maybe points::Array{PointVortex{T}, 1} where T ?
     tree::Array{LightGraphs.SimpleGraphs.SimpleEdge{Int64},1}
 end
 Cluster(vort::Array{PointVortex,1}) = Cluster(vort,spanning_tree(xpos(vort),ypos(vort)))
