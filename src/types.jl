@@ -53,7 +53,7 @@ mutable struct PointVortex3D <: Vortex
 end
 
 mutable struct Filament <: Vortex
-    points::Array{PointVortex{T}, 1} where T
+    points::Array{PointVortex3D, 1}
 end
 
 struct Ansatz <: CoreShape
