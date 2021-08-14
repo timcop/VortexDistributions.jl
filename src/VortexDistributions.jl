@@ -34,7 +34,7 @@ circ_mask, keep_vortices,
 # 3d utils
 gradient_2D, gradient_3D, wps_v, wps_v_2D, find_nearest, findidx_uniform,
 wps_array_plot, gradient_3D_cent, grad_itp, wps_int, psi_itp, vortices_plot,
-find_closest_tuple, dense, densityfilm,
+find_closest_tuple,
 
 # 3d detection
 find_vortices3D, find_vortices3D_v2, vortex_boundary_bottom, vortex_boundary_top,

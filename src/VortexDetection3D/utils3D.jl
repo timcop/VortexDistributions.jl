@@ -296,21 +296,3 @@ function find_closest_tuple(arr, X)
 
     return index;
 end
-
-function dense(psi, sim)
-    ψm = xspace(psi,sim)
-    density = abs2.(ψm)
-    pmax = maximum(density)
-    return density/pmax
-end
-
-function densityfilm(Nt,saveto="media/3dquenchiso.gif")
-    scene = Scene()
-    tindex = Node(1)
-
-    scene = volume(lift(i -> dense(i), tindex), algorithm = :iso,show_axis=false)
-
-    record(scene, saveto, 1:Nt-10) do i
-        tindex[] = i
-    end
-end

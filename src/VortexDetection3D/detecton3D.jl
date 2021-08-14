@@ -53,7 +53,8 @@ function find_vortices3D_v2(psi, X)
 end
         
 # Need to pass X and define x = X[1] etc
-function vortex_boundary_bottom(v, dx, dy, dz)
+function vortex_boundary_bottom(v,X, dx, dy, dz)
+    x = X[1]; y = X[2]; z = X[3];
     at_boundary = true;
 
     if ((v[1, 1] - x[1] > dx) && (x[end] - v[1, 1] > dx)) # Then not at x Boundary
@@ -66,7 +67,8 @@ function vortex_boundary_bottom(v, dx, dy, dz)
     return at_boundary;
 end
 
-function vortex_boundary_top(v, dx, dy, dz)
+function vortex_boundary_top(v, X, dx, dy, dz)
+    x = X[1]; y = X[2]; z = X[3];
     at_boundary = true;
     if ((v[end, 1] - x[1] > dx) && (x[end] - v[end, 1] > dx)) # Then not at x Boundary
         if ((v[end, 2] - y[1] > dy) && (y[end] - v[end, 2] > dy)) # " y boundary 
@@ -78,7 +80,9 @@ function vortex_boundary_top(v, dx, dy, dz)
     return at_boundary;
 end
 
-function vortex_link_bottom(vidx, vorts_label)
+function vortex_link_bottom(vidx, vorts_label, X)
+    x = X[1]; y = X[2]; z = X[3];
+    dx = x[2]-x[1]; dy = y[2]-y[1]; dz = z[2]-z[1];
     v = vorts_label[vidx];
     for i in 1:length(vorts_label)
         vi = vorts_label[i];
@@ -95,13 +99,13 @@ function vortex_link_bottom(vidx, vorts_label)
                 # If z level is at bottom of vi 
                 if vi[index, 3] == vi[1, 3]
                     vorts_label[i][:, 5] .= vorts_label[vidx][1, 5]
-                    if !vortex_boundary_top(vi, dx, dy, dz)
-                        vortex_link_top(i, vorts_label);
+                    if !vortex_boundary_top(vi, X, dx, dy, dz)
+                        vortex_link_top(i, vorts_label, X);
                     end
                 elseif vi[index, 3] == vi[end, 3]
                     vorts_label[i][:, 5] .= vorts_label[vidx][1, 5]
-                    if !vortex_boundary_bottom(vi, dx, dy, dz)
-                        vortex_link_bottom(i, vorts_label);
+                    if !vortex_boundary_bottom(vi,X, dx, dy, dz)
+                        vortex_link_bottom(i, vorts_label, X);
                     end
                 end
             end
@@ -109,7 +113,9 @@ function vortex_link_bottom(vidx, vorts_label)
     end
 end
 
-function vortex_link_top(vidx, vorts_label)
+function vortex_link_top(vidx, vorts_label, X)
+    x = X[1]; y = X[2]; z = X[3];
+    dx = x[2]-x[1]; dy = y[2]-y[1]; dz = z[2]-z[1];
     v = vorts_label[vidx];
     for i in 1:length(vorts_label)
         vi = vorts_label[i];
@@ -126,14 +132,14 @@ function vortex_link_top(vidx, vorts_label)
                 # If z level is at bottom of vi 
                 if vi[index, 3] == vi[1, 3]
                     vorts_label[i][:, 5] .= vorts_label[vidx][1, 5]
-                    if !vortex_boundary_top(vi, dx, dy, dz)
-                        vortex_link_top(i, vorts_label);
+                    if !vortex_boundary_top(vi,X, dx, dy, dz)
+                        vortex_link_top(i, vorts_label, X);
                     end
                 elseif vi[index, 3] == vi[end, 3]
                     vorts_label[i][:, 5] .= vorts_label[vidx][1, 5]
 
-                    if !vortex_boundary_bottom(vi, dx, dy, dz)
-                        vortex_link_bottom(i, vorts_label);
+                    if !vortex_boundary_bottom(vi,X, dx, dy, dz)
+                        vortex_link_bottom(i, vorts_label, X);
                     end
                 end
             end
@@ -142,7 +148,7 @@ function vortex_link_top(vidx, vorts_label)
 end
 
 function sort_vorts_label(vorts_label)
-    
+    NUM_VORTS = length(vorts_label)
     temp = Array{Float64, 2}[]
     i = 1;
     for i in 1:length(vorts_label)
