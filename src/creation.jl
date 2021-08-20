@@ -209,53 +209,53 @@ function gpecore_exact(K,L=2,N=100,R = K)
     #Κ = 1
     #R = 2 # Stretching coordinate.  R ~ kappa seems to be a good ballpark
 
-# Convert Chebyshev grid to [0,L] from [1 -1];
-z,Dz = getChebDMatrix(N)
-blank,D2z = getChebD2Matrix(N)
-z = vec(reverse(z,dims=2))
-z = (z)*L./2
-Dz = -2*Dz./L
-D2z = 4*D2z./L.^2
+    # Convert Chebyshev grid to [0,L] from [1 -1];
+    z,Dz = getChebDMatrix(N)
+    blank,D2z = getChebD2Matrix(N)
+    z = vec(reverse(z,dims=2))
+    z = (z)*L./2
+    Dz = -2*Dz./L
+    D2z = 4*D2z./L.^2
 
-# y is the physical coordinate, range [0 infinity] (i.e y = r)
-y =  @. R*(1+z)/(1-z)
+    # y is the physical coordinate, range [0 infinity] (i.e y = r)
+    y =  @. R*(1+z)/(1-z)
 
-#initial guess based on ansatz
-ψ = @. y/hypot(1/Λ,y)
-ψ[1] = 0
-ψ[end] = 1
-ψ0 = vec(ψ)
+    #initial guess based on ansatz
+    ψ = @. y/hypot(1/Λ,y)
+    ψ[1] = 0
+    ψ[end] = 1
+    ψ0 = vec(ψ)
 
-Q = vec(z.^2 .- 2*z .+ 1)
-Qmat = repeat(Q,1,N)
-Zmat = repeat(2*(z .-1),1,N)
-Ymat = repeat(1 ./y,1,N);
+    Q = vec(z.^2 .- 2*z .+ 1)
+    Qmat = repeat(Q,1,N)
+    Zmat = repeat(2*(z .-1),1,N)
+    Ymat = repeat(1 ./y,1,N);
 
-# Second Derivative
-residuals = -0.5*( (Q.*(D2z*ψ) + 2*(z .-1).*(Dz*ψ) ).*Q/(4*R^2)
-        + (Q/(2*R) ./y).*(Dz*ψ) )+ 0.5*K^2 *ψ ./y.^2 + ψ.^3 .- ψ
-residuals[1] = 0; residuals[end] =0
-
-while sum(abs.(residuals).^2) > 1e-12
     # Second Derivative
     residuals = -0.5*( (Q.*(D2z*ψ) + 2*(z .-1).*(Dz*ψ) ).*Q/(4*R^2)
             + (Q/(2*R) ./y).*(Dz*ψ) )+ 0.5*K^2 *ψ ./y.^2 + ψ.^3 .- ψ
     residuals[1] = 0; residuals[end] =0
 
-    Jacobi = -0.5*( (Qmat.*(D2z) + Zmat.*(Dz) ).*(Qmat/(4*R^2))
-    + (Qmat/(2*R).*Ymat).*(Dz) ) + diagm(0 => 0.5*K^2 ./y.^2)+ diagm(0 => 3*ψ.^2 .- 1)
+    while sum(abs.(residuals).^2) > 1e-12
+        # Second Derivative
+        residuals = -0.5*( (Q.*(D2z*ψ) + 2*(z .-1).*(Dz*ψ) ).*Q/(4*R^2)
+                + (Q/(2*R) ./y).*(Dz*ψ) )+ 0.5*K^2 *ψ ./y.^2 + ψ.^3 .- ψ
+        residuals[1] = 0; residuals[end] =0
+
+        Jacobi = -0.5*( (Qmat.*(D2z) + Zmat.*(Dz) ).*(Qmat/(4*R^2))
+        + (Qmat/(2*R).*Ymat).*(Dz) ) + diagm(0 => 0.5*K^2 ./y.^2)+ diagm(0 => 3*ψ.^2 .- 1)
 
 
-    Jacobi[1,:] = [1 zeros(1,N-1)]
-    Jacobi[N,:] = [zeros(1,N-1) 1]
+        Jacobi[1,:] = [1 zeros(1,N-1)]
+        Jacobi[N,:] = [zeros(1,N-1) 1]
 
 
-    Δ = vec(-4/7*(Jacobi\residuals))
+        Δ = vec(-4/7*(Jacobi\residuals))
 
-    ψ = ψ + Δ
-    ψ[1] = 0
-    ψ[end] =1
-end
+        ψ = ψ + Δ
+        ψ[1] = 0
+        ψ[end] =1
+    end
     res = norm(residuals)^2
     return y,ψ,res
 end
@@ -325,7 +325,7 @@ function chebdif(N, M)
    end
 
    return x, DM
-   end
+end
 
 function getChebDMatrix(n)
    z, M = chebdif(n, 1)

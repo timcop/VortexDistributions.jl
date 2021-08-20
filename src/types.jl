@@ -1,4 +1,5 @@
 abstract type Field end
+abstract type Field3D end
 abstract type Vortex end
 abstract type CoreShape end
 abstract type VortexGroup end
@@ -21,6 +22,13 @@ mutable struct Torus <: Field
     y::Vector{Float64}
 end
 
+mutable struct Torus3D <: Field3D
+    ψ::Array{Complex{Float64},3}
+    x::Vector{Float64}
+    y::Vector{Float64}
+    z::Vector{Float64}
+end
+
 """
     Sphere <: Field
 
@@ -39,6 +47,14 @@ mutable struct Sphere <: Field
     y::Vector{Float64}
 end
 
+mutable struct Sphere3D <: Field3D
+    ψ::Array{Complex{Float64},3}
+    x::Vector{Float64}
+    y::Vector{Float64}
+    z::Vector{Float64}
+
+end
+
 mutable struct PointVortex <: Vortex
     xv::Float64
     yv::Float64
@@ -50,10 +66,6 @@ mutable struct PointVortex3D <: Vortex
     yv::Float64
     zv::Float64
     qv::Int64
-end
-
-mutable struct Filament <: Vortex
-    points::Array{PointVortex3D, 1}
 end
 
 struct Ansatz <: CoreShape
