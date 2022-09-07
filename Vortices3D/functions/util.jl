@@ -72,7 +72,7 @@ function plot_iso(psi, X, visible=true, heal_2=false)
         scene = volume(X[1], X[2], X[3], density, algorithm = :iso, show_axis=true, visible=visible)
     end
     screen = display(scene)
-    resize!(screen, 2998, 1920)
+    # resize!(screen, 2998, 1920)
 end
 
 function scatterVortsOnIso(vorts, markersize=200)
