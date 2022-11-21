@@ -1,41 +1,91 @@
+using FourierGPE, VortexDistributions, JLD2
+using Interpolations 
+using JLD2
+using Parameters
+using SpecialFunctions
+using LinearAlgebra
+using ToeplitzMatrices
+using SparseArrays
+using FFTW
+using FileIO
+using ProgressMeter
+using LightGraphs
+using SimpleWeightedGraphs
+
+# 3d deps
+# using GLMakie
+using ScikitLearn
+using NearestNeighbors
+using Distances
 using FLoops
 
-function find_vortex_points_3d(
+include("../../src/utils_plots.jl")
+
+
+@load "examples/3d/quench_slab_jld2s/quenchslab_t200.jld2" psi X
+
+
+plot_iso(psi, X)
+
+
+function find_vortex_points_3d_harmonic(
     psi :: Array{ComplexF64, 3}, 
-    X :: Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}, 
+    # X :: Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}, 
+    X, 
+
     N :: Int = 1
     ) :: Vector{Vector{Float64}}
     # TODO: Add periodic checks 
-    @assert N <= 16
-    @assert N >= 1
+    # @assert N <= 16
+    # @assert N >= 1
     # print("inner: " + N)
 
+    
     x = X[1]; y = X[2]; z = X[3];
     dx = x[2]-x[1]; dy = y[2]-y[1]; dz = z[2]-z[1];
 
 
-    @assert size(psi)[1] == length(x)
-    @assert size(psi)[2] == length(y)
-    @assert size(psi)[3] == length(z)
+    # xlim1 = 1; xlim2 = length(x);
+    # ylim1 = 1; ylim2 = length(y);
+    # zlim1 = 1; zlim2 = length(z);
 
-    x_itp = interpolate(X[1], BSpline(Linear()));
-    y_itp = interpolate(X[2], BSpline(Linear()));
-    z_itp = interpolate(X[3], BSpline(Linear()));
+    # x = x[xlim1:xlim2]; y = y[ylim1:ylim2]; z = z[zlim1:zlim2]
+
+    # @assert size(psi)[1] == length(x)
+    # @assert size(psi)[2] == length(y)
+    # @assert size(psi)[3] == length(z)
+
+    x_itp = interpolate(x, BSpline(Linear()));
+    y_itp = interpolate(y, BSpline(Linear()));
+    z_itp = interpolate(z, BSpline(Linear()));
 
     x_etp = extrapolate(x_itp, Line())
     y_etp = extrapolate(y_itp, Line())
     z_etp = extrapolate(z_itp, Line())
 
-    psi_itp = interpolate(psi, BSpline(Quadratic(Periodic(OnCell()))))
-    psi_etp = extrapolate(psi_itp, Periodic())
+    # psi_itp = interpolate(psi, BSpline(Quadratic((Periodic(OnCell()), Periodic(OnCell()), Line(OnCell())))))
+    psi_itp = interpolate(psi, BSpline(Cubic(Line(OnGrid()))))
+    psi_etp = extrapolate(psi_itp, (Periodic(), Periodic(), Line()))
+    # psi_etp = extrapolate(psi_itp, Periodic())
 
-    x_range = LinRange(-1,length(x)+2,N*(length(x)+4))
-    y_range = LinRange(-1,length(y)+2,N*(length(y)+4))
-    z_range = LinRange(-1,length(z)+2,N*(length(z)+4))
+    x_range = LinRange(1,length(x),N*(length(x)))
+    y_range = LinRange(1,length(y),N*(length(y)))
 
-    x = LinRange(x[1]-2*dx, x[end]+2*dx, length(x)+4);
-    y = LinRange(y[1]-2*dy, y[end]+2*dy, length(y)+4);
-    z = LinRange(z[1]-2*dz, z[end]+2*dz, length(z)+4);
+    z_range = LinRange(1,length(z), N*(length(z)))
+
+    # x = LinRange(x[1]-2*dx, x[end]+2*dx, length(x)+4);
+    # y = LinRange(y[1]-2*dy, y[end]+2*dy, length(y)+4);
+    x = LinRange(x[1], x[end], length(x));
+    y = LinRange(y[1], y[end], length(y));
+    z = LinRange(z[1], z[end], length(z));
+
+    # x_range = LinRange(1,length(x),N*(length(x)))
+    # y_range = LinRange(1,length(y),N*(length(y)))
+    # z_range = LinRange(1,length(z), N*(length(z)))
+
+    # x = LinRange(x[1], x[end], length(x));
+    # y = LinRange(y[1], y[end], length(y));
+    # z = LinRange(z[1], z[end], length(z));
 
     ## loop vectorisation, run in parallel 
     vorts3d = []
@@ -53,7 +103,6 @@ function find_vortex_points_3d(
             for vidx_x in 1:size(vorts_x)[1]
                 v_x = vorts_x[vidx_x, :]
                 vx_x = [x_etp(xidx), v_x[1], v_x[2], v_x[3]]
-                # push!(vorts_xslice, vx_x)
                 push!(results_x[Threads.threadid()], vx_x)
             end
         end
@@ -71,8 +120,8 @@ function find_vortex_points_3d(
     end
 
     let x=x, y=y
-        @floop for zidx in z_range
-            local vorts_z = vortex_array(findvortices(Torus(psi_etp(x_range[1]:x_range[end], y_range[1]:y_range[end], zidx), x, y)))
+        @floop for zidx in reverse(z_range)
+            vorts_z = vortex_array(findvortices(Torus(psi_etp(x_range[1]:x_range[end], y_range[1]:y_range[end], zidx), x, y)))
             for vidx_z in 1:size(vorts_z)[1]
                 v_z = vorts_z[vidx_z, :]
                 vz_z = [v_z[1], v_z[2], z_etp(zidx), v_z[3]]
@@ -89,13 +138,29 @@ function find_vortex_points_3d(
     return vorts3d
 end
 
+function vortInBall1!(vcx, vcy, vcz, Δvcx, Δvcy, Δvcz, kdtree, ϵ, f, search)
+    vp = [vcx + Δvcx, vcy + Δvcy, vcz + Δvcz]
+    p_idxs = inrange(kdtree, vp, ϵ)
+    union!(f, Set(p_idxs))
+    union!(search, Set(p_idxs))
+end
 
-function connect_vortex_points_3d(
+function vortInBall2!(vcx, vcy, vcz, Δvcx, Δvcy, Δvcz, kdtree, ϵ, f, search)
+    vp = [vcx + Δvcx, vcy + Δvcy, vcz + Δvcz]
+    p_idxs = inrange(kdtree, vp, ϵ)
+    setdiff!(p_idxs, f) 
+    union!(f, Set(p_idxs))
+    union!(search, Set(p_idxs))
+end
+
+function connect_vortex_points_3d_harmonic(
     vorts_3d :: Vector{Vector{Float64}}, 
     X :: Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}, 
     α :: Float64, 
     N :: Int, 
-    periodic :: Bool =false
+    periodic_x,
+    periodic_y,
+    periodic_z
     ) :: Vector{Set{Int64}}
 
     @assert size(vorts_3d)[1] != 4
@@ -132,28 +197,32 @@ function connect_vortex_points_3d(
         f = Set(f_idxs)
         search = Set(f_idxs)
         setdiff!(search, idx)
-        if periodic
-            vcx = v_matrix[1,idx]; vcy=v_matrix[2,idx]; vcz = v_matrix[3,idx];
 
+        vcx = v_matrix[1,idx]; vcy=v_matrix[2,idx]; vcz = v_matrix[3,idx];
+        if periodic_x
             if abs(vcx - x[1]) < ϵ
                 vortInBall1!(vcx, vcy, vcz, xdist+Δx, 0, 0, kdtree, ϵ, f, search)
             elseif abs(vcx - x[end]) < ϵ
                 vortInBall1!(vcx, vcy, vcz, -xdist-Δx, 0, 0, kdtree, ϵ, f, search)
             end
+        end
 
+        if periodic_y
             if abs(vcy - y[1]) < ϵ
                 vortInBall1!(vcx, vcy, vcz, 0, ydist+Δy, 0, kdtree, ϵ, f, search)
             elseif abs(vcy - y[end]) < ϵ
                 vortInBall1!(vcx, vcy, vcz, 0, -ydist-Δy, 0, kdtree, ϵ, f, search)
             end
-
+        end
+            
+        if periodic_z
             if abs(vcz - z[1]) < ϵ
                 vortInBall1!(vcx, vcy, vcz, 0, 0, zdist+Δz, kdtree, ϵ, f, search)
             elseif abs(vcz - z[end]) < ϵ
                 vortInBall1!(vcx, vcy, vcz, 0, 0, -zdist-Δz, kdtree, ϵ, f, search)
             end
-
         end
+
         while length(search) > 0
             idx = first(search)
             setdiff!(search, idx)
@@ -162,27 +231,27 @@ function connect_vortex_points_3d(
             setdiff!(vc_idxs, f)
             union!(f, Set(vc_idxs))
             union!(search, Set(vc_idxs))
-            if periodic
-                vcx = v_matrix[1,idx]; vcy=v_matrix[2,idx]; vcz = v_matrix[3,idx];
-
+            vcx = v_matrix[1,idx]; vcy=v_matrix[2,idx]; vcz = v_matrix[3,idx];
+            if periodic_x
                 if abs(vcx - x[1]) < ϵ
                     vortInBall2!(vcx, vcy, vcz, xdist+Δx, 0, 0, kdtree, ϵ, f, search)
                 elseif abs(vcx - x[end]) < ϵ
                     vortInBall2!(vcx, vcy, vcz, -xdist-Δx, 0, 0, kdtree, ϵ, f, search)
                 end
-
+            end
+            if periodic_y
                 if abs(vcy - y[1]) < ϵ
                     vortInBall2!(vcx, vcy, vcz, 0, ydist+Δy, 0, kdtree, ϵ, f, search)
                 elseif abs(vcy - y[end]) < ϵ
                     vortInBall2!(vcx, vcy, vcz, 0, -ydist-Δy, 0, kdtree, ϵ, f, search)
                 end
-
+            end
+            if periodic_z
                 if abs(vcz - z[1]) < ϵ
                     vortInBall2!(vcx, vcy, vcz, 0, 0, zdist+Δz, kdtree, ϵ, f, search)
                 elseif abs(vcz - z[end]) < ϵ
                     vortInBall2!(vcx, vcy, vcz, 0, 0, -zdist-Δz, kdtree, ϵ, f, search)
                 end
-
             end
         end
         if length(f) > N
@@ -193,99 +262,56 @@ function connect_vortex_points_3d(
     return fils
 end
 
-function sort_classified_vorts_3d(
-    v_class :: Vector{Set{Int64}}, 
-    vorts_3d :: Vector{Vector{Float64}}, 
-    X :: Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}
-    ) :: Vector{Any}
 
-    ## Paramaters of box
-    x = X[1]; y = X[2]; z = X[3];
-    dx = x[2]-x[1]; dy = y[2]-y[1]; dz = z[2]-z[1];
-    Lx = x[end]-x[1] + dx; Ly = y[end]-y[1] + dy; Lz = z[end]-z[1] + dz;
 
-    # All vortex points in matrix form
-    v_matrix = vcat(vorts_3d'...)[:,1:3]'
+N = 2
+@time vorts_3d = find_vortex_points_3d_harmonic(psi[:, :, 1:end-1], [X[1], X[2], X[3][1:end-1]], N)
+# vorts_3d = find_vortex_points_3d_harmonic(psi, X, N)
 
-    # An array of arrays for each vortex sorted
-    vorts_sorted = []
 
-    # Loop through the classified vortices
-    for i in 1:length(v_class)
 
-        vi_set = v_class[i] # Set of column indicies of v_matrix for this vortex
-        vi_mat = v_matrix[:, collect(vi_set)] # Create v_matrix for this vortex
-        vi_mat = vi_mat[:, [vortInBounds3(vi_mat[:, j], X) for j = 1:size(vi_mat, 2)]] # Filters half of vortices outside bounds of box
-        tree = BallTree(vi_mat, PeriodicEuclidean([Lx, Ly, Lz])) # BallTree
-        vi_set = Set(collect(1:size(vi_mat, 2))) # Set of indicies for current v_matrix
-        vi_sorted_index = [] # Indicies of vortices in order
-        
-        idx = first(vi_set) # Pop the first vortex
-        vc = vi_mat[:, idx]
-        setdiff!(vi_set, idx) # Take it away from the index set
-        push!(vi_sorted_index, idx) # Push it to start of list
-        
-        # Find the nearest neighbour to vc excluding vortices found (not in vi_set),
-        # push to vi_sorted_index and take away from vi_set, then set vc to the vortex found.
-        # Finish when no vortex found near to vc within dx distance
-        while length(vi_set) != 0
-            v_new_index, dist = nn(tree, vc, i -> i ∉ vi_set)
-            if dist < dx
-                push!(vi_sorted_index, v_new_index)
-                setdiff!(vi_set, v_new_index)
-                vc = vi_mat[:, v_new_index]
-            else
-                break
-            end
-        end
+plot_iso(psi, X)
+scatterVortsOnIso(vorts_3d, 0.04)
 
-        vi_sorted = vi_mat[:, collect(vi_sorted_index)] # Get the matrix of points in sorted order
-        vi_sorted_array = collect(eachcol(vi_sorted)) # Convert into array of points
-        vi_sorted_array = vi_sorted_array[[vortInBounds(vi_sorted_array[j], X) for j = 1:length(vi_sorted_array)]] # Filter all vortices not on grid
-        push!(vorts_sorted, vi_sorted_array) # Append to the vorts_sorted array
-    end
-    @assert length(vorts_sorted) == length(v_class)
-    return vorts_sorted
-end
+new_v1::Vector{Vector{Float64}} = []
 
-# non-exported helper funcs
-function vortInBounds(v, X)
-    x = X[1]; y = X[2]; z = X[3];
-    dx = x[2]-x[1]; dy = y[2]-y[1]; dz = z[2]-z[1];
-    if ((v[1] >= x[1]) && (v[1] <= x[end]) && 
-        (v[2] >= y[1]) && (v[2] <= y[end]) && 
-        (v[3] >= z[1]) && (v[3] <= z[end]))
-        return true
-    else 
-        return false
+zb = 4
+for i in eachindex(vorts_3d)
+    if (vorts_3d[i][3] > z[1+zb] && vorts_3d[i][3] < z[end-zb])
+        push!(new_v1, vorts_3d[i])
     end
 end
 
+plot_iso(psi, X)
+scatterVortsOnIso(new_v1)
 
-function vortInBounds3(v, X)
-    x = X[1]; y = X[2]; z = X[3];
-    dx = x[2]-x[1]; dy = y[2]-y[1]; dz = z[2]-z[1];
-    if ((v[1] >= x[1]-dx) && (v[1] <= x[end]) && 
-        (v[2] >= y[1]-dy) && (v[2] <= y[end]) && 
-        (v[3] >= z[1]-dz) && (v[3] <= z[end]))
-        return true
-    else 
-        return false
-    end
-end
+@time vorts_class = connect_vortex_points_3d_harmonic(vorts_3d, X, 0.6, N, true, true, false)
+plot_iso(psi, X, true, true)
+scatterClassifiedVortices(vorts_class, vorts_3d, X, 0.02)
+
+@time v_sort = sort_classified_vorts_3d(vorts_class, vorts_3d, X); 
+plot_iso(psi, X, true, true)
+periodicPlotting(v_sort, X, 1)
 
 
-function vortInBall1!(vcx, vcy, vcz, Δvcx, Δvcy, Δvcz, kdtree, ϵ, f, search)
-    vp = [vcx + Δvcx, vcy + Δvcy, vcz + Δvcz]
-    p_idxs = inrange(kdtree, vp, ϵ)
-    union!(f, Set(p_idxs))
-    union!(search, Set(p_idxs))
-end
 
-function vortInBall2!(vcx, vcy, vcz, Δvcx, Δvcy, Δvcz, kdtree, ϵ, f, search)
-    vp = [vcx + Δvcx, vcy + Δvcy, vcz + Δvcz]
-    p_idxs = inrange(kdtree, vp, ϵ)
-    setdiff!(p_idxs, f) 
-    union!(f, Set(p_idxs))
-    union!(search, Set(p_idxs))
-end
+
+# extrema(X[3])
+
+# using JLD2
+
+@save "quenchslab3d.jld2" psi X 
+
+
+
+
+
+
+@time vorts_3d = find_vortex_points_3d_harmonic(psi, X, 4)
+
+vdmat = vorts3DMatrix(vorts_3d)
+
+maximum(vdmat[:, 3])
+
+plot_iso(psi, X)
+scatterVortsOnIso(vorts_3d, 0.05)
