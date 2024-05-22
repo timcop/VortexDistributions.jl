@@ -2,7 +2,7 @@ using VortexDistributions, GLMakie, Colors
 
 using ColorSchemes
 
-function plot_iso(psi, X, visible=true, heal_2=false)
+function plot_iso(psi, X, heal_2=false)
     density = abs2.(psi)
     pmax = maximum(density)
     density = density/pmax
@@ -13,9 +13,11 @@ function plot_iso(psi, X, visible=true, heal_2=false)
 
 
     if heal_2
-        scene = volume(X[1], X[2], X[3], density, algorithm = :iso, visible=visible, isovalue=0.65,isorange=0.075, colormap=cmap2, transparency=true)
+        # scene = volume(X[1], X[2], X[3], density, algorithm = :iso, visible=visible, isovalue=0.65,isorange=0.075, colormap=cmap2, transparency=true)
+        scene = volume(X[1], X[2], X[3], density, algorithm = :iso, isovalue=0.65,isorange=0.075, colormap=cmap2, transparency=true)
     else
-        scene = volume(X[1], X[2], X[3], density, algorithm = :iso, visible=visible, colormap=cmap2, transparency=true, isovalue=0.1,isorange=0.075)
+        # scene = volume(X[1], X[2], X[3], density, algorithm = :iso, visible=visible, colormap=cmap2, transparency=true, isovalue=0.1,isorange=0.075)
+        scene = volume(X[1], X[2], X[3], density, algorithm = :iso, colormap=cmap2, transparency=true)
     end
     screen = display(scene)
     # resize!(screen, 2998, 1920)
@@ -31,7 +33,7 @@ function scatterVortsOnIso(vorts, markersize=0.1)
     meshscatter!(vorts[:, 1], vorts[:, 2], vorts[:, 3], color="blue", markersize=markersize)
 end
 
-function scatterClassifiedVortices(vortSets, vorts_3d, X, size, edges=false)
+function scatterClassifiedVortices(vortSets, vorts_3d, X, edges=false)
     colors = distinguishable_colors(length(vortSets),[RGB(0.8103465454545455,0.2951044545454546,0.4575856363636363)],dropseed=true)
     v_matrix = vcat(vorts_3d'...)[:,1:3]'
 
@@ -40,7 +42,7 @@ function scatterClassifiedVortices(vortSets, vorts_3d, X, size, edges=false)
         if !edges
             vi = vi[:, [vortInBounds(vi[:, i], X) for i = 1:length(vi[1, :])]] # Filters vortices that aren't on the grid
         end
-        meshscatter!(vi[1,:],vi[2,:],vi[3,:],color=colors[i], markersize=size)
+        meshscatter!(vi[1,:],vi[2,:],vi[3,:],color=colors[i])
     end
 end
 

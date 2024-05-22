@@ -1,14 +1,10 @@
 using FLoops
 
-function find_vortex_points_3d(
-    psi :: Array{ComplexF64, 3}, 
-    X :: Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}, 
-    N :: Int = 1
-    ) :: Vector{Vector{Float64}}
-    # TODO: Add periodic checks 
+function find_vortex_points_3d(psi, X, N = 1)
+
     @assert N <= 16
     @assert N >= 1
-    # print("inner: " + N)
+
 
     x = X[1]; y = X[2]; z = X[3];
     dx = x[2]-x[1]; dy = y[2]-y[1]; dz = z[2]-z[1];
@@ -53,7 +49,6 @@ function find_vortex_points_3d(
             for vidx_x in 1:size(vorts_x)[1]
                 v_x = vorts_x[vidx_x, :]
                 vx_x = [x_etp(xidx), v_x[1], v_x[2], v_x[3]]
-                # push!(vorts_xslice, vx_x)
                 push!(results_x[Threads.threadid()], vx_x)
             end
         end
@@ -72,7 +67,7 @@ function find_vortex_points_3d(
 
     let x=x, y=y
         @floop for zidx in z_range
-            local vorts_z = vortex_array(findvortices(Torus(psi_etp(x_range[1]:x_range[end], y_range[1]:y_range[end], zidx), x, y)))
+            vorts_z = vortex_array(findvortices(Torus(psi_etp(x_range[1]:x_range[end], y_range[1]:y_range[end], zidx), x, y)))
             for vidx_z in 1:size(vorts_z)[1]
                 v_z = vorts_z[vidx_z, :]
                 vz_z = [v_z[1], v_z[2], z_etp(zidx), v_z[3]]
@@ -90,13 +85,7 @@ function find_vortex_points_3d(
 end
 
 
-function connect_vortex_points_3d(
-    vorts_3d :: Vector{Vector{Float64}}, 
-    X :: Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}, 
-    α :: Float64, 
-    N :: Int, 
-    periodic :: Bool =false
-    ) :: Vector{Set{Int64}}
+function connect_vortex_points_3d(vorts_3d, X, α, N,  periodic = false)
 
     @assert size(vorts_3d)[1] != 4
 
@@ -193,11 +182,108 @@ function connect_vortex_points_3d(
     return fils
 end
 
-function sort_classified_vorts_3d(
-    v_class :: Vector{Set{Int64}}, 
-    vorts_3d :: Vector{Vector{Float64}}, 
-    X :: Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}
-    ) :: Vector{Any}
+function connect_vortex_points_3d_harmonic( vorts_3d, X, α, N, periodic_x, periodic_y, periodic_z) 
+
+    @assert size(vorts_3d)[1] != 4
+
+    v_matrix = zeros(3, size(vorts_3d)[1])
+    for i in 1:3
+        for j in 1:size(vorts_3d)[1]
+            v_matrix[i, j] = vorts_3d[j][i]
+        end
+    end
+
+    kdtree = KDTree(v_matrix)
+    num_vorts = length(v_matrix[1,:])
+    unvisited = Set(collect(1:num_vorts))
+    fils = []
+    x = X[1]; y = X[2]; z = X[3];
+    Δx = x[2]-x[1]; Δy = y[2]-y[1]; Δz = z[2]-z[1];
+    xdist = x[end]-x[1]; ydist = y[end]-y[1]; zdist = z[end]-z[1];
+
+    if N == 1
+        ϵ = (1+α)*sqrt(Δx^2+Δy^2+Δz^2)/N # 
+    else 
+        ϵ = (1+α)*sqrt(Δx^2+Δy^2+Δz^2)/(N-1) # 
+    end
+
+    if ϵ < Δx/3
+        ϵ = Δx/3
+    end
+
+    while length(unvisited) > 0
+        idx = first(unvisited)
+        vc = v_matrix[:, idx]
+        f_idxs = inrange(kdtree, vc, ϵ)
+        f = Set(f_idxs)
+        search = Set(f_idxs)
+        setdiff!(search, idx)
+
+        vcx = v_matrix[1,idx]; vcy=v_matrix[2,idx]; vcz = v_matrix[3,idx];
+        if periodic_x
+            if abs(vcx - x[1]) < ϵ
+                vortInBall1!(vcx, vcy, vcz, xdist+Δx, 0, 0, kdtree, ϵ, f, search)
+            elseif abs(vcx - x[end]) < ϵ
+                vortInBall1!(vcx, vcy, vcz, -xdist-Δx, 0, 0, kdtree, ϵ, f, search)
+            end
+        end
+
+        if periodic_y
+            if abs(vcy - y[1]) < ϵ
+                vortInBall1!(vcx, vcy, vcz, 0, ydist+Δy, 0, kdtree, ϵ, f, search)
+            elseif abs(vcy - y[end]) < ϵ
+                vortInBall1!(vcx, vcy, vcz, 0, -ydist-Δy, 0, kdtree, ϵ, f, search)
+            end
+        end
+            
+        if periodic_z
+            if abs(vcz - z[1]) < ϵ
+                vortInBall1!(vcx, vcy, vcz, 0, 0, zdist+Δz, kdtree, ϵ, f, search)
+            elseif abs(vcz - z[end]) < ϵ
+                vortInBall1!(vcx, vcy, vcz, 0, 0, -zdist-Δz, kdtree, ϵ, f, search)
+            end
+        end
+
+        while length(search) > 0
+            idx = first(search)
+            setdiff!(search, idx)
+            vc = v_matrix[:, idx]
+            vc_idxs = inrange(kdtree, vc, ϵ)
+            setdiff!(vc_idxs, f)
+            union!(f, Set(vc_idxs))
+            union!(search, Set(vc_idxs))
+            vcx = v_matrix[1,idx]; vcy=v_matrix[2,idx]; vcz = v_matrix[3,idx];
+            if periodic_x
+                if abs(vcx - x[1]) < ϵ
+                    vortInBall2!(vcx, vcy, vcz, xdist+Δx, 0, 0, kdtree, ϵ, f, search)
+                elseif abs(vcx - x[end]) < ϵ
+                    vortInBall2!(vcx, vcy, vcz, -xdist-Δx, 0, 0, kdtree, ϵ, f, search)
+                end
+            end
+            if periodic_y
+                if abs(vcy - y[1]) < ϵ
+                    vortInBall2!(vcx, vcy, vcz, 0, ydist+Δy, 0, kdtree, ϵ, f, search)
+                elseif abs(vcy - y[end]) < ϵ
+                    vortInBall2!(vcx, vcy, vcz, 0, -ydist-Δy, 0, kdtree, ϵ, f, search)
+                end
+            end
+            if periodic_z
+                if abs(vcz - z[1]) < ϵ
+                    vortInBall2!(vcx, vcy, vcz, 0, 0, zdist+Δz, kdtree, ϵ, f, search)
+                elseif abs(vcz - z[end]) < ϵ
+                    vortInBall2!(vcx, vcy, vcz, 0, 0, -zdist-Δz, kdtree, ϵ, f, search)
+                end
+            end
+        end
+        if length(f) > N
+            push!(fils, f)
+        end
+        setdiff!(unvisited, f)
+    end
+    return fils
+end
+
+function sort_classified_vorts_3d(v_class, vorts_3d, X) 
 
     ## Paramaters of box
     x = X[1]; y = X[2]; z = X[3];
@@ -288,4 +374,16 @@ function vortInBall2!(vcx, vcy, vcz, Δvcx, Δvcy, Δvcz, kdtree, ϵ, f, search)
     setdiff!(p_idxs, f) 
     union!(f, Set(p_idxs))
     union!(search, Set(p_idxs))
+end
+
+# vorts need to lie inside (b1, b2)
+function filterVortBounds(vorts, xb1, xb2, yb1, yb2, zb1, zb2)
+    filt_vorts = []
+    for i in eachindex(vorts)
+        v = vorts[i]
+        if ((v[1] >= xb1 && v[1] <= xb2) && (v[2] >= yb1 && v[2] <= yb2) && (v[3] >= zb1 && v[3] <= zb2))
+            push!(filt_vorts, v)
+        end
+    end
+    return filt_vorts
 end

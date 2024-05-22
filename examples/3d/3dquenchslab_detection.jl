@@ -63,14 +63,15 @@ function find_vortex_points_3d_harmonic(
     y_etp = extrapolate(y_itp, Line())
     z_etp = extrapolate(z_itp, Line())
 
+    psi_itp = interpolate(psi, BSpline(Quadratic(Periodic(OnCell()))))
+    psi_etp = extrapolate(psi_itp, Periodic())
     # psi_itp = interpolate(psi, BSpline(Quadratic((Periodic(OnCell()), Periodic(OnCell()), Line(OnCell())))))
-    psi_itp = interpolate(psi, BSpline(Cubic(Line(OnGrid()))))
-    psi_etp = extrapolate(psi_itp, (Periodic(), Periodic(), Line()))
     # psi_etp = extrapolate(psi_itp, Periodic())
+    # psi_itp = interpolate(psi, BSpline(Cubic(Line(OnGrid()))))
+    # psi_etp = extrapolate(psi_itp, (Periodic(), Periodic(), Line()))
 
     x_range = LinRange(1,length(x),N*(length(x)))
     y_range = LinRange(1,length(y),N*(length(y)))
-
     z_range = LinRange(1,length(z), N*(length(z)))
 
     # x = LinRange(x[1]-2*dx, x[end]+2*dx, length(x)+4);
